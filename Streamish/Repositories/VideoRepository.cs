@@ -132,6 +132,71 @@ namespace Streamish.Repositories
             }
         }
 
+        //This grabs one video by the id and the comments associated with that video.
+        public Video GetVideoByIdWithComments(int id)
+        {
+            using (var conn = Connection)
+            {
+                conn.Open();
+
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"SELECT v.Id as VideoId, v.Title, v.Description, v.Url, v.DateCreated, v.UserProfileId,
+                                      up.Name, up.Email, up.DateCreated AS UserProfileCreated, up.Id as VideoUserProfileId, up.ImageUrl AS UserProfileImageURL,
+                                      c.Id as CommentId, c.Message, c.UserProfileId AS UserProfileComment, c.VideoId
+                                      FROM Video v
+                                      LEFT JOIN UserProfile up ON v.UserProfileId = up.Id
+                                      LEFT JOIN Comment c on c.VideoId = v.Id
+                                      WHERE v.id = @Id";
+
+                    DbUtils.AddParameter(cmd, "@Id", id);
+
+                    var reader = cmd.ExecuteReader();
+
+                    Video video = null;
+
+                    while (reader.Read())
+                    {
+                        if (video == null)
+
+                            video = new Video()
+                            {
+                                Id = id,
+                                Title = DbUtils.GetString(reader, "Title"),
+                                Description = DbUtils.GetString(reader, "Description"),
+                                DateCreated = DbUtils.GetDateTime(reader, "VideoDateCreated"),
+                                Url = DbUtils.GetString(reader, "Url"),
+                                UserProfileId = DbUtils.GetInt(reader, "VideoUserProfileId"),
+                                UserProfile = new UserProfile()
+                                {
+                                    Id = DbUtils.GetInt(reader, "VideoUserProfileId"),
+                                    Name = DbUtils.GetString(reader, "Name"),
+                                    Email = DbUtils.GetString(reader, "Email"),
+                                    DateCreated = DbUtils.GetDateTime(reader, "UserProfileDateCreated"),
+                                    ImageUrl = DbUtils.GetString(reader, "UserProfileImageUrl"),
+                                },
+                                Comments = new List<Comment>()
+
+                            };
+
+                        if (DbUtils.IsNotDbNull(reader, "CommentId"))
+                        {
+                            video.Comments.Add(new Comment()
+                            {
+                                VideoId = id,
+                                Id = DbUtils.GetInt(reader, "CommentId"),
+                                Message = DbUtils.GetString(reader, "Message"),
+                                UserProfileId = DbUtils.GetInt(reader, "UserProfileComment")
+                            });
+                        }
+                    }
+
+                    reader.Close();
+
+                    return video;
+                }
+            }
+        }
 
 
 
@@ -143,9 +208,12 @@ namespace Streamish.Repositories
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = @"
-                          SELECT Title, Description, Url, DateCreated, UserProfileId
-                            FROM Video
-                           WHERE Id = @Id";
+                          SELECT v.Title, v.Description, v.Url, v.DateCreated, v.UserProfileId
+                                 up.Name, up.Email, up.DateCreated as UserProfileCreated
+                                 up.ImageUrl AS UserProfileImageUrl 
+                            FROM Video v
+                            LEFT JOIN UserProfile up ON v.UserProfileId = up.Id
+                           WHERE v.Id = @Id";
 
                     DbUtils.AddParameter(cmd, "@Id", id);
 
